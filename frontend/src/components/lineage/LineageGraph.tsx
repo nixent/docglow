@@ -237,6 +237,52 @@ export function LineageGraph({ nodes, edges, highlightId, onNodeClick }: Lineage
         </g>
       </svg>
 
+      {/* Mini-map */}
+      {layout.width > 0 && layout.height > 0 && (
+        <div className="absolute top-3 right-3 border border-[var(--border)] rounded bg-[var(--bg)] overflow-hidden opacity-80 hover:opacity-100 transition-opacity"
+             style={{ width: 160, height: 100 }}>
+          <svg width="160" height="100" viewBox={`0 0 ${layout.width} ${layout.height}`} preserveAspectRatio="xMidYMid meet">
+            {layout.edges.map((edge, i) => {
+              if (edge.points.length < 2) return null
+              const d = edge.points.map((p, j) => `${j === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+              return <path key={i} d={d} fill="none" stroke="var(--text-muted, #94a3b8)" strokeWidth={3} strokeOpacity={0.3} />
+            })}
+            {layout.nodes.map(node => (
+              <rect
+                key={node.id}
+                x={node.x}
+                y={node.y}
+                width={node.width}
+                height={node.height}
+                rx={3}
+                fill={RESOURCE_COLORS[node.resource_type] ?? '#6b7280'}
+                fillOpacity={0.6}
+              />
+            ))}
+            {containerRef.current && (() => {
+              const rect = containerRef.current!.getBoundingClientRect()
+              const vpW = rect.width / zoom
+              const vpH = rect.height / zoom
+              const vpX = -pan.x / zoom
+              const vpY = -pan.y / zoom
+              return (
+                <rect
+                  x={vpX}
+                  y={vpY}
+                  width={vpW}
+                  height={vpH}
+                  fill="none"
+                  stroke="var(--text, #0f172a)"
+                  strokeWidth={4}
+                  strokeOpacity={0.4}
+                  rx={2}
+                />
+              )
+            })()}
+          </svg>
+        </div>
+      )}
+
       {/* Zoom controls */}
       <div className="absolute bottom-3 right-3 flex gap-1">
         <button

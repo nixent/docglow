@@ -25,6 +25,7 @@ def generate_site(
     profiling_sample_size: int | None = None,
     profiling_cache: bool = True,
     ai_enabled: bool = False,
+    ai_key: str | None = None,
     title: str | None = None,
     select: str | None = None,
     exclude: str | None = None,
@@ -60,6 +61,7 @@ def generate_site(
         artifacts,
         profiling_enabled=profiling_enabled,
         ai_enabled=ai_enabled,
+        ai_key=ai_key,
         select=select,
         exclude=exclude,
     )

@@ -162,6 +162,7 @@ def build_datum_data(
     *,
     profiling_enabled: bool = False,
     ai_enabled: bool = False,
+    ai_key: str | None = None,
     select: str | None = None,
     exclude: str | None = None,
 ) -> dict[str, Any]:
@@ -275,6 +276,11 @@ def build_datum_data(
         "ai_enabled": ai_enabled,
     }
 
+    # Resolve AI key: explicit param > env var
+    resolved_ai_key: str | None = None
+    if ai_enabled:
+        resolved_ai_key = ai_key or os.environ.get("ANTHROPIC_API_KEY")
+
     return {
         "metadata": metadata,
         "models": models,
@@ -287,6 +293,7 @@ def build_datum_data(
         "health": health,
         "search_index": search_index,
         "ai_context": ai_context,
+        "ai_key": resolved_ai_key,
     }
 
 
