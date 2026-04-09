@@ -42,3 +42,7 @@ frontend/test-results/
 .env
 .env.local
 .coverage
+
+# Private config (contains internal IDs)
+.claude/commands/linear.md
+agent-orchestrator.yaml
