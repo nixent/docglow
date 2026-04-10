@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-04-09
+
+### Added
+- **Verbose request logging** for `docglow serve` — use `--verbose` to see every HTTP request (e.g., `GET /docglow-data.json 200`), helpful for diagnosing blank screen issues (#61)
+- **Data file size shown at startup** — `docglow serve` now prints the size of `docglow-data.json`
+- **Large file warning** — warns when data file exceeds 15 MB with tips to use `--static` or `--slim`
+
+### Fixed
+- **Port-in-use error** now shows a clear message with suggestion to try a different port
+- Added CORS and no-cache headers to dev server for reliable local development
+
 ## [0.5.2] - 2026-04-09
 
 ### Added
@@ -185,7 +196,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Suppressed hover highlights during node drag to prevent flicker
 - Shared SVG markers to reduce DOM overhead
 
-[Unreleased]: https://github.com/docglow/docglow/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/docglow/docglow/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/docglow/docglow/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/docglow/docglow/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/docglow/docglow/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/docglow/docglow/compare/v0.4.1...v0.5.0
