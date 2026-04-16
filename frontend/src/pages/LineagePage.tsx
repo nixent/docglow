@@ -80,6 +80,7 @@ export function LineagePage() {
   const { selected: globalTagSelected, mode: globalTagMode, toggle: toggleTag, setMode: setTagMode, clear: clearTags } = useTagFilterStore()
   const tagFilter: FilterState = useMemo(() => ({ mode: globalTagMode, selected: new Set(globalTagSelected) }), [globalTagSelected, globalTagMode])
   const [folderFilter, toggleFolder, setFolderMode, clearFolders] = useFilterState()
+  const [layerFilter, toggleLayer, setLayerMode, clearLayers] = useFilterState()
 
   const suggestions = useMemo(() => {
     if (!data) return []
@@ -145,13 +146,22 @@ export function LineagePage() {
 
   const subgraph = useMemo(() => {
     if (!rawSubgraph) return null
-    return applyFilters(rawSubgraph.nodes, rawSubgraph.edges, typeFilter, tagFilter, folderFilter)
-  }, [rawSubgraph, typeFilter, tagFilter, folderFilter])
+    return applyFilters(rawSubgraph.nodes, rawSubgraph.edges, typeFilter, tagFilter, folderFilter, layerFilter)
+  }, [rawSubgraph, typeFilter, tagFilter, folderFilter, layerFilter])
 
   const subgraphOptions = useMemo(() => {
-    if (!rawSubgraph) return { tags: [], folders: [], types: RESOURCE_TYPES }
+    if (!rawSubgraph) return { tags: [], folders: [], types: RESOURCE_TYPES, layers: [] as string[] }
     return computeSubgraphOptions(rawSubgraph.nodes)
   }, [rawSubgraph])
+
+  // Map layer rank → definition for display labels and accent colors
+  const layerByRank = useMemo(() => {
+    const map = new Map<string, { name: string; color: string }>()
+    for (const l of data?.lineage.layer_config ?? []) {
+      map.set(String(l.rank), { name: l.name, color: l.color })
+    }
+    return map
+  }, [data])
 
   const modelColumnsMap = useMemo(() => {
     if (!data) return {}
@@ -216,13 +226,14 @@ export function LineagePage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const hasActiveFilters = typeFilter.selected.size > 0 || tagFilter.selected.size > 0 || folderFilter.selected.size > 0
+  const hasActiveFilters = typeFilter.selected.size > 0 || tagFilter.selected.size > 0 || folderFilter.selected.size > 0 || layerFilter.selected.size > 0
 
   const clearAllFilters = useCallback(() => {
     clearTypes()
     clearTags()
     clearFolders()
-  }, [clearTypes, clearTags, clearFolders])
+    clearLayers()
+  }, [clearTypes, clearTags, clearFolders, clearLayers])
 
   if (!data) return null
 
@@ -335,6 +346,18 @@ export function LineagePage() {
                 displayLabel={(v) => v.split('/').pop() ?? v}
               />
             )}
+            {subgraphOptions.layers.length > 0 && (
+              <FilterDropdown
+                label="Layers"
+                options={subgraphOptions.layers}
+                filter={layerFilter}
+                onToggle={toggleLayer}
+                onSetMode={setLayerMode}
+                onClear={clearLayers}
+                displayLabel={(rank) => layerByRank.get(rank)?.name ?? `Layer ${rank}`}
+                optionAccent={(rank) => layerByRank.get(rank)?.color}
+              />
+            )}
 
             {hasActiveFilters && (
               <button
@@ -393,15 +416,36 @@ export function LineagePage() {
         </div>
 
         <div className="flex-1 relative min-h-0">
-          <LineageFlow
-            nodes={subgraph.nodes}
-            edges={subgraph.edges}
-            pinnedIds={pinnedIds}
-            onTogglePin={handleTogglePin}
-            layerConfig={data.lineage.layer_config}
-            columnLineageData={data.column_lineage}
-            modelColumns={modelColumnsMap}
-          />
+          {subgraph.nodes.length === 0 ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center px-6">
+              <svg width={32} height={32} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="text-[var(--text-muted)]">
+                <circle cx={11} cy={11} r={8} />
+                <path d="m21 21-4.35-4.35" />
+                <path d="M8 11h6" />
+              </svg>
+              <div>
+                <div className="text-sm font-medium text-[var(--text)]">No models match the filter criteria.</div>
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="mt-2 text-xs text-primary hover:underline cursor-pointer"
+                  >
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <LineageFlow
+              nodes={subgraph.nodes}
+              edges={subgraph.edges}
+              pinnedIds={pinnedIds}
+              onTogglePin={handleTogglePin}
+              layerConfig={data.lineage.layer_config}
+              columnLineageData={data.column_lineage}
+              modelColumns={modelColumnsMap}
+            />
+          )}
         </div>
       </div>
     )
