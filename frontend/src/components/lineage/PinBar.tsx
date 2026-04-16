@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import type { LineageNode } from '../../types'
+import type { LineageNode, LineageEdge } from '../../types'
+import { resolveDbtSelection } from '../../utils/dbtSelect'
 
 const RESOURCE_COLORS: Record<string, string> = {
   model: '#2563eb',
@@ -13,18 +14,22 @@ const RESOURCE_COLORS: Record<string, string> = {
 interface PinBarProps {
   pinnedIds: Set<string>
   onPin: (id: string) => void
+  onPinMany?: (ids: string[]) => void
   onUnpin: (id: string) => void
   onClearAll: () => void
   nodes: LineageNode[]
+  edges: LineageEdge[]
 }
 
-export function PinBar({ pinnedIds, onPin, onUnpin, onClearAll, nodes }: PinBarProps) {
+export function PinBar({ pinnedIds, onPin, onPinMany, onUnpin, onClearAll, nodes, edges }: PinBarProps) {
   const [search, setSearch] = useState('')
   const [isOpen, setIsOpen] = useState(false)
+  const [dbtMode, setDbtMode] = useState(false)
+  const [dbtError, setDbtError] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const results = search.length >= 1
+  const results = !dbtMode && search.length >= 1
     ? nodes
         .filter(n =>
           !pinnedIds.has(n.id) &&
@@ -43,15 +48,47 @@ export function PinBar({ pinnedIds, onPin, onUnpin, onClearAll, nodes }: PinBarP
     inputRef.current?.focus()
   }, [onPin])
 
+  const handleDbtSubmit = useCallback(() => {
+    if (!search.trim()) return
+    const { matched, errors } = resolveDbtSelection(search, nodes, edges)
+    if (matched.size === 0) {
+      setDbtError(errors[0] ?? 'No models matched')
+      return
+    }
+    const ids = Array.from(matched)
+    if (onPinMany) {
+      onPinMany(ids)
+    } else {
+      ids.forEach(id => onPin(id))
+    }
+    setSearch('')
+    setDbtError(null)
+    inputRef.current?.focus()
+  }, [search, nodes, edges, onPin, onPinMany])
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && dbtMode) {
+      e.preventDefault()
+      handleDbtSubmit()
+      return
+    }
     if (e.key === 'Backspace' && search === '' && pinnedNodes.length > 0) {
       onUnpin(pinnedNodes[pinnedNodes.length - 1].id)
     }
     if (e.key === 'Escape') {
       setSearch('')
       setIsOpen(false)
+      setDbtError(null)
     }
-  }, [search, pinnedNodes, onUnpin])
+  }, [dbtMode, search, pinnedNodes, onUnpin, handleDbtSubmit])
+
+  const toggleDbtMode = useCallback(() => {
+    setDbtMode(m => !m)
+    setSearch('')
+    setDbtError(null)
+    setIsOpen(false)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }, [])
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -63,12 +100,25 @@ export function PinBar({ pinnedIds, onPin, onUnpin, onClearAll, nodes }: PinBarP
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  // Clear dbt error when user edits input
+  useEffect(() => {
+    if (dbtError) setDbtError(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search])
+
+  const placeholder = dbtMode
+    ? '+fct_orders tag:finance  (dbt selection syntax, press Enter)'
+    : pinnedIds.size === 0
+      ? 'Search models to pin...'
+      : 'Add another model...'
+
   return (
     <div ref={containerRef} className="relative w-full">
       {/* Input area with chips */}
       <div
-        className="flex flex-wrap items-center gap-1.5 px-3 py-2 border border-[var(--border)]
-                    rounded-lg bg-[var(--bg)] cursor-text min-h-[40px]"
+        className={`flex flex-wrap items-center gap-1.5 px-3 py-2 border rounded-lg bg-[var(--bg)] cursor-text min-h-[40px]
+          ${dbtMode ? 'border-amber-500/60' : 'border-[var(--border)]'}
+          ${dbtError ? 'border-red-500/60' : ''}`}
         onClick={() => inputRef.current?.focus()}
       >
         {pinnedNodes.map(node => (
@@ -91,24 +141,42 @@ export function PinBar({ pinnedIds, onPin, onUnpin, onClearAll, nodes }: PinBarP
           ref={inputRef}
           type="text"
           value={search}
-          onChange={e => { setSearch(e.target.value); setIsOpen(true) }}
-          onFocus={() => setIsOpen(true)}
+          onChange={e => { setSearch(e.target.value); if (!dbtMode) setIsOpen(true) }}
+          onFocus={() => { if (!dbtMode) setIsOpen(true) }}
           onKeyDown={handleKeyDown}
-          placeholder={pinnedIds.size === 0 ? 'Search models to pin...' : 'Add another model...'}
-          className="flex-1 min-w-[120px] text-sm bg-transparent outline-none"
+          placeholder={placeholder}
+          className={`flex-1 min-w-[160px] text-sm bg-transparent outline-none
+            ${dbtMode ? 'font-mono' : ''}`}
         />
         {pinnedIds.size >= 2 && (
           <button
-            onClick={onClearAll}
+            onClick={(e) => { e.stopPropagation(); onClearAll() }}
             className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] shrink-0 cursor-pointer"
           >
             Clear all
           </button>
         )}
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleDbtMode() }}
+          title={dbtMode ? 'Switch to search mode' : 'Switch to dbt selection syntax'}
+          className={`shrink-0 px-1.5 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer
+            ${dbtMode
+              ? 'bg-amber-500 text-white'
+              : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+        >
+          ⚡ dbt
+        </button>
       </div>
 
+      {/* dbt error */}
+      {dbtError && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 px-3 py-2 text-xs text-red-500 bg-red-500/10 border border-red-500/30 rounded-lg">
+          {dbtError}
+        </div>
+      )}
+
       {/* Autocomplete dropdown */}
-      {isOpen && results.length > 0 && (
+      {isOpen && !dbtMode && results.length > 0 && (
         <div className="absolute z-50 top-full left-0 right-0 mt-1 border border-[var(--border)]
                         rounded-lg bg-[var(--bg)] shadow-lg overflow-hidden">
           <ul className="max-h-60 overflow-y-auto py-1">

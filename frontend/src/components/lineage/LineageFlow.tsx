@@ -799,12 +799,20 @@ function LineageFlowInner({
   }, [])
 
   // Single click → open side panel; double click → navigate to detail page
-  const handleNodeClick: NodeMouseHandler = useCallback((_, node) => {
+  // Cmd/Ctrl+Click → toggle pin
+  const handleNodeClick: NodeMouseHandler = useCallback((event, node) => {
     if (node.id.startsWith('folder:') && onFolderClick) {
       onFolderClick(node.id)
       return
     }
     if (node.id.startsWith('__layer_band_')) return
+
+    // Cmd+Click / Ctrl+Click toggles the pin state
+    if ((event.metaKey || event.ctrlKey) && _onTogglePin) {
+      event.preventDefault()
+      _onTogglePin(node.id)
+      return
+    }
 
     // Use a timer to distinguish single vs double click
     if (clickTimerRef.current) {
@@ -825,7 +833,7 @@ function LineageFlowInner({
         if (onNodeClick) onNodeClick(node.id)
       }, 250)
     }
-  }, [navigate, onNodeClick, onFolderClick, onNavigateAway])
+  }, [navigate, onNodeClick, onFolderClick, onNavigateAway, _onTogglePin])
 
   // Close panel when clicking canvas background
   const handlePaneClick = useCallback(() => {

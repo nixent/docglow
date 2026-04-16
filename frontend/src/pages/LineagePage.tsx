@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useProjectStore } from '../stores/projectStore'
 import { useTagFilterStore } from '../stores/tagFilterStore'
 import { LineageFlow } from '../components/lineage/LineageFlow'
@@ -41,10 +42,39 @@ function computeSuggestions(nodes: LineageNode[], edges: LineageEdge[]): ModelSu
 
 export function LineagePage() {
   const { data } = useProjectStore()
-  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
-  const [depth, setDepth] = useState(2)
-  const [direction, setDirection] = useState<LineageDirection>('both')
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Initialize pins from URL on first render
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
+    const raw = searchParams.get('pins')
+    return raw ? new Set(raw.split(',').filter(Boolean)) : new Set()
+  })
+  const [depth, setDepth] = useState(() => {
+    const raw = searchParams.get('depth')
+    const n = raw ? parseInt(raw, 10) : 2
+    return isNaN(n) ? 2 : Math.max(1, Math.min(6, n))
+  })
+  const [direction, setDirection] = useState<LineageDirection>(() => {
+    const raw = searchParams.get('dir')
+    return raw === 'upstream' || raw === 'downstream' ? raw : 'both'
+  })
   const [search, setSearch] = useState('')
+
+  // Sync state → URL
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams)
+    if (pinnedIds.size > 0) {
+      params.set('pins', Array.from(pinnedIds).join(','))
+      params.set('depth', String(depth))
+      params.set('dir', direction)
+    } else {
+      params.delete('pins')
+      params.delete('depth')
+      params.delete('dir')
+    }
+    setSearchParams(params, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pinnedIds, depth, direction])
 
   const [typeFilter, toggleType, setTypeMode, clearTypes] = useFilterState()
   const { selected: globalTagSelected, mode: globalTagMode, toggle: toggleTag, setMode: setTagMode, clear: clearTags } = useTagFilterStore()
@@ -72,10 +102,28 @@ export function LineagePage() {
     setSearch('')
   }, [])
 
+  const handlePinMany = useCallback((ids: string[]) => {
+    setPinnedIds(prev => {
+      const next = new Set(prev)
+      for (const id of ids) next.add(id)
+      return next
+    })
+    setSearch('')
+  }, [])
+
   const handleUnpin = useCallback((id: string) => {
     setPinnedIds(prev => {
       const next = new Set(prev)
       next.delete(id)
+      return next
+    })
+  }, [])
+
+  const handleTogglePin = useCallback((id: string) => {
+    setPinnedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }, [])
@@ -198,9 +246,11 @@ export function LineagePage() {
               <PinBar
                 pinnedIds={pinnedIds}
                 onPin={handlePin}
+                onPinMany={handlePinMany}
                 onUnpin={handleUnpin}
                 onClearAll={handleClearAll}
                 nodes={data.lineage.nodes}
+                edges={data.lineage.edges}
               />
             </div>
           </div>
@@ -348,7 +398,7 @@ export function LineagePage() {
             nodes={subgraph.nodes}
             edges={subgraph.edges}
             pinnedIds={pinnedIds}
-            onTogglePin={handlePin}
+            onTogglePin={handleTogglePin}
             layerConfig={data.lineage.layer_config}
             columnLineageData={data.column_lineage}
             modelColumns={modelColumnsMap}
